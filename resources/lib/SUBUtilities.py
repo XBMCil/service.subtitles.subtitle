@@ -72,7 +72,7 @@ class SubtitleHelper:
     def _search(self, item):
         results = []
 
-        search_string = item["tvshow"] if item["tvshow"] else item["title"]
+        search_string = re.split(r'\s\(\w+\)$', item["tvshow"])[0] if item["tvshow"] else item["title"]
         if item["tvshow"]:
             query = {"q": search_string.lower(), "cs": "series"}
         else:
