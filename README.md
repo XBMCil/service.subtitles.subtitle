@@ -1,4 +1,4 @@
-service.subtitles.subscenter
+service.subtitles.subtitle
 ==================
 
-XBMC Subscenter.org subtitle service for Gotham
+XBMC Subtitle.co.il subtitle service for Gotham
