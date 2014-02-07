@@ -9,6 +9,11 @@ import zlib
 import shutil
 
 try:
+    import StorageServer
+except ImportError:
+    import storageserverdummy as StorageServer
+
+try:
     import xbmc
     import xbmcvfs
     import xbmcaddon
@@ -24,7 +29,7 @@ __language__ = __addon__.getLocalizedString
 __profile__ = xbmc.translatePath(__addon__.getAddonInfo('profile')).decode("utf-8")
 __temp__ = xbmc.translatePath(os.path.join(__profile__, 'temp')).decode("utf-8")
 
-
+cache = StorageServer.StorageServer(__scriptname__, int(24 * 364 / 2))  # 6 months
 
 #===============================================================================
 # Private utility functions
@@ -37,6 +42,11 @@ def normalizeString(str):
 
 def log(module, msg):
     xbmc.log((u"### [%s] - %s" % (module, msg,)).encode('utf-8'), level=xbmc.LOGDEBUG)
+
+
+def get_cache_key(prefix="", str=""):
+    str = re.sub('\W+', '_', str).lower()
+    return prefix + str
 
 
 # Returns the corresponding script language name for the Hebrew unicode language
@@ -61,40 +71,57 @@ class SubtitleHelper:
         self.urlHandler = URLHandler()
 
     def get_subtitle_list(self, item):
-        search_results = self._search(item)
         if item["tvshow"]:
+            search_results = self._search_tvshow(item)
             results = self._build_tvshow_subtitle_list(search_results, item)
         else:
+            search_results = self._search_movie(item)
             results = self._build_movie_subtitle_list(search_results, item)
+
         return results
 
-    # return list of movies / tv-series from the site`s search
-    def _search(self, item):
-        results = []
+    # return list of tv-series from the site`s search
+    def _search_tvshow(self, item):
+        search_string = re.split(r'\s\(\w+\)$', item["tvshow"])[0]
 
-        search_string = re.split(r'\s\(\w+\)$', item["tvshow"])[0] if item["tvshow"] else item["title"]
-        if item["tvshow"]:
+        cache_key = get_cache_key("tv-show_", search_string)
+        results = cache.get(cache_key)
+
+        if not results:
             query = {"q": search_string.lower(), "cs": "series"}
+
+            search_result = self.urlHandler.request(self.BASE_URL + "/browse.php?" + urllib.urlencode(query))
+            if search_result is None:
+                return results  # return empty set
+
+            urls = re.findall(
+                u'<a href="viewseries\.php\?id=(\d+)[^"]+" itemprop="url">[^<]+</a></div><div style="direction:ltr;" class="smtext">([^<]+)</div>',
+                search_result)
+
+            results = self._filter_urls(urls, search_string, item)
+            cache.set(cache_key, repr(results))
         else:
-            query = {"q": search_string.lower(), "cs": "movies", "fy": int(item["year"]) - 1,
-                     "uy": int(item["year"]) + 1}
+            results = eval(results)
+
+        return results
+
+    # return list of movie from the site`s search
+    def _search_movie(self, item):
+        results = []
+        search_string = item["title"]
+        query = {"q": search_string.lower(), "cs": "movies", "fy": int(item["year"]) - 1,
+                 "uy": int(item["year"]) + 1}
 
         search_result = self.urlHandler.request(self.BASE_URL + "/browse.php?" + urllib.urlencode(query))
         if search_result is None:
             return results  # return empty set
 
-        if not item["tvshow"]:
-            urls = re.findall(
-                u'<a href="view\.php\?id=(\d+)[^"]+" itemprop="url">[^<]+</a></div><div style="direction:ltr;" class="smtext">([^<]+)</div><span class="smtext">(\d{4})</span>',
-                search_result)
-        else:
-            urls = re.findall(
-                u'<a href="viewseries\.php\?id=(\d+)[^"]+" itemprop="url">[^<]+</a></div><div style="direction:ltr;" class="smtext">([^<]+)</div>',
-                search_result)
+        urls = re.findall(
+            u'<a href="view\.php\?id=(\d+)[^"]+" itemprop="url">[^<]+</a></div><div style="direction:ltr;" class="smtext">([^<]+)</div><span class="smtext">(\d{4})</span>',
+            search_result)
 
         results = self._filter_urls(urls, search_string, item)
         return results
-
 
     def _filter_urls(self, urls, search_string, item):
         filtered = []
@@ -122,30 +149,9 @@ class SubtitleHelper:
         for result in search_results:
             url = self.BASE_URL + "/view.php?" + urllib.urlencode({"id": result["id"], "m": "subtitles"})
             subtitle_page = self._is_logged_in(url)
-            if subtitle_page is not None:
-                found_subtitles = re.findall(
-                    "downloadsubtitle\.php\?id=(?P<fid>\d*).*?subt_lang.*?title=\"(?P<language>.*?)\".*?subtitle_title.*?title=\"(?P<title>.*?)\">.*?>(?P<downloads>[^ ]+) הורדות",
-                    subtitle_page)
-
-                for (subtitle_id, language, title, downloads) in found_subtitles:
-                    if xbmc.convertLanguage(heb_to_eng(language), xbmc.ISO_639_2) in item[
-                        "3let_language"]:
-                        subtitle_rate = self._calc_rating(title, item["file_original_path"])
-                        total_downloads += int(downloads.replace(",", ""))
-                        ret.append(
-                            {'lang_index': item["3let_language"].index(
-                                xbmc.convertLanguage(heb_to_eng(language), xbmc.ISO_639_2)),
-                             'filename': title,
-                             'link': subtitle_id,
-                             'language_name': xbmc.convertLanguage(heb_to_eng(language),
-                                                                   xbmc.ENGLISH_NAME),
-                             'language_flag': xbmc.convertLanguage(heb_to_eng(language),
-                                                                   xbmc.ISO_639_1),
-                             'ID': subtitle_id,
-                             'rating': int(downloads.replace(",", "")),
-                             'sync': subtitle_rate >= 4,
-                             'hearing_imp': 0
-                            })
+            x, i = self._retrive_subtitles(subtitle_page, item)
+            total_downloads += i
+            ret += x
 
         # Fix the rating
         if total_downloads:
@@ -158,51 +164,78 @@ class SubtitleHelper:
         ret = []
         total_downloads = 0
         for result in search_results:
-            url = self.BASE_URL + "/viewseries.php?" + urllib.urlencode({"id": result["id"], "m": "subtitles"})
-            subtitle_page = self._is_logged_in(url)
+            cache_key = get_cache_key("tv-show_seasons_", "%s_%s" % (result["name"], result["id"]))
+            subtitle_page = cache.get(cache_key)
+            if not subtitle_page:
+                url = self.BASE_URL + "/viewseries.php?" + urllib.urlencode({"id": result["id"], "m": "subtitles"})
+                subtitle_page = self._is_logged_in(url)
+                if subtitle_page is not None:
+                    # Retrieve the requested season
+                    subtitle_page = re.findall("seasonlink_(\d+)[^>]+>(\d+)</a>", subtitle_page)
+                    cache.set(cache_key, repr(subtitle_page))
+            else:
+                subtitle_page = eval(subtitle_page)
 
-            if subtitle_page is not None:
-                # Retrieve the requested season
-                subtitle_page = re.findall("seasonlink_(\d+)[^>]+>(\d+)</a>", subtitle_page)
+            if subtitle_page:
                 for (season_id, season_num) in subtitle_page:
                     if season_num == item["season"]:
-                        # Retrieve the requested episode
-                        url = self.BASE_URL + "/getajax.php?" + urllib.urlencode({"seasonid": season_id})
-                        subtitle_page = self.urlHandler.request(url)
-                        found_episodes = re.findall("episodelink_(\d+)[^>]+>(\d+)</a>", subtitle_page)
-                        for (episode_id, episode_num) in found_episodes:
-                            if (episode_num == item["episode"]):
-                                url = self.BASE_URL + "/getajax.php?" + urllib.urlencode({"episodedetails": episode_id})
-                                subtitle_page = self.urlHandler.request(url)
-                                found_subtitles = re.findall(
-                                    "downloadsubtitle\.php\?id=(?P<fid>\d*).*?subt_lang.*?title=\"(?P<language>.*?)\".*?subtitle_title.*?title=\"(?P<title>.*?)\">.*?>(?P<downloads>[^ ]+) הורדות",
-                                    subtitle_page)
+                        cache_key = get_cache_key("tv-show_episodes_", "%s_%s" % (result["name"], season_id))
+                        found_episodes = cache.get(cache_key)
+                        if not found_episodes:
+                            # Retrieve the requested episode
+                            url = self.BASE_URL + "/getajax.php?" + urllib.urlencode({"seasonid": season_id})
+                            subtitle_page = self.urlHandler.request(url)
+                            if subtitle_page is not None:
+                                found_episodes = re.findall("episodelink_(\d+)[^>]+>(\d+)</a>", subtitle_page)
+                                cache.set(cache_key, repr(found_episodes))
+                        else:
+                            found_episodes = eval(found_episodes)
 
-                                for (subtitle_id, language, title, downloads) in found_subtitles:
-                                    if xbmc.convertLanguage(heb_to_eng(language), xbmc.ISO_639_2) in item[
-                                        "3let_language"]:
-                                        subtitle_rate = self._calc_rating(title, item["file_original_path"])
-                                        total_downloads += int(downloads.replace(",", ""))
-                                        ret.append(
-                                            {'lang_index': item["3let_language"].index(
-                                                xbmc.convertLanguage(heb_to_eng(language), xbmc.ISO_639_2)),
-                                             'filename': title,
-                                             'link': subtitle_id,
-                                             'language_name': xbmc.convertLanguage(heb_to_eng(language),
-                                                                                   xbmc.ENGLISH_NAME),
-                                             'language_flag': xbmc.convertLanguage(heb_to_eng(language),
-                                                                                   xbmc.ISO_639_1),
-                                             'ID': subtitle_id,
-                                             'rating': int(downloads.replace(",", "")),
-                                             'sync': subtitle_rate >= 4,
-                                             'hearing_imp': 0
-                                            })
-                                        # Fix the rating
+                        if found_episodes:
+                            for (episode_id, episode_num) in found_episodes:
+                                if episode_num == item["episode"]:
+                                    url = self.BASE_URL + "/getajax.php?" + urllib.urlencode({"episodedetails": episode_id})
+                                    subtitle_page = self.urlHandler.request(url)
+
+                                    x, i = self._retrive_subtitles(subtitle_page, item)
+                                    total_downloads += i
+                                    ret += x
+
+        # Fix the rating
         if total_downloads:
             for it in ret:
                 it["rating"] = str(int(round(it["rating"] / float(total_downloads), 1) * 5))
 
         return sorted(ret, key=lambda x: (x['lang_index'], x['sync'], x['rating']), reverse=True)
+
+    def _retrive_subtitles(self, page, item):
+        ret = []
+        total_downloads = 0
+        if page is not None:
+            found_subtitles = re.findall(
+                "downloadsubtitle\.php\?id=(?P<fid>\d*).*?subt_lang.*?title=\"(?P<language>.*?)\".*?subtitle_title.*?title=\"(?P<title>.*?)\">.*?>(?P<downloads>[^ ]+) הורדות",
+                page)
+            for (subtitle_id, language, title, downloads) in found_subtitles:
+                if xbmc.convertLanguage(heb_to_eng(language), xbmc.ISO_639_2) in item[
+                    "3let_language"]:
+                    subtitle_rate = self._calc_rating(title, item["file_original_path"])
+                    total_downloads += int(downloads.replace(",", ""))
+                    ret.append(
+                        {'lang_index': item["3let_language"].index(
+                            xbmc.convertLanguage(heb_to_eng(language), xbmc.ISO_639_2)),
+                         'filename': title,
+                         'link': subtitle_id,
+                         'language_name': xbmc.convertLanguage(heb_to_eng(language),
+                                                               xbmc.ENGLISH_NAME),
+                         'language_flag': xbmc.convertLanguage(heb_to_eng(language),
+                                                               xbmc.ISO_639_1),
+                         'ID': subtitle_id,
+                         'rating': int(downloads.replace(",", "")),
+                         'sync': subtitle_rate >= 4,
+                         'hearing_imp': 0
+                        })
+        return ret, total_downloads
+
 
     def _calc_rating(self, subsfile, file_original_path):
         file_name = os.path.basename(file_original_path)
@@ -250,7 +283,7 @@ class SubtitleHelper:
 
     def _is_logged_in(self, url):
         content = self.urlHandler.request(url)
-        if re.search(r'friends\.php', content):  #check if logged in
+        if content is not None and re.search(r'friends\.php', content):  #check if logged in
             return content
         elif self.login():
             return self.urlHandler.request(url)

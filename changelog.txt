@@ -1,3 +1,6 @@
+4.1.0 - by CaTz 07/02/2014
+- cache tv shows ids for future use. (make the lookup much faster)
+
 4.0.0 - by CaTz 06/02/2014
 - Redesign the code to work as OOP
 - Fix the rating stars (now shows num of downloads from the website)
