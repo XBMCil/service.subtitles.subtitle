@@ -14,7 +14,10 @@
             sagiben
         </description>
         <source>https://github.com/XBMCil/service.subtitles.subtitle</source>
+        <language></language>
         <email></email>
+        <forum></forum>
+        <website></website>
         <license>GNU GENERAL PUBLIC LICENSE. Version 2, June 1991</license>
     </extension>
 </addon>
