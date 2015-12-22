@@ -103,7 +103,7 @@ def log(module, msg):
 
 
 def get_cache_key(prefix="", str=""):
-    str = regexHelper.sub('_', str).lower()
+    str = re.sub(r'[\'\(\)\.\-\]\[ ]+', '_', str).lower()
     return prefix + '_' + str
 
 
