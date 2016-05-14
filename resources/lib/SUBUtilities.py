@@ -190,7 +190,7 @@ class SubtitleHelper:
 
     def _filter_urls(self, urls, search_string, item):
         filtered = []
-        search_string = regexHelper.sub(' ', search_string.lower())
+        search_string = regexHelper.sub('', search_string.lower())
 
         h = HTMLParser.HTMLParser()
 
