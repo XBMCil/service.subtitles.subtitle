@@ -31,7 +31,7 @@ msgid "Login Details"
 msgstr ""
 
 msgctxt "#32005"
-msgid "Invalid email or password, please edit your credentials in the properties"
+msgid "Wrong email or password"
 msgstr ""
 
 msgctxt "#32006"
@@ -44,4 +44,12 @@ msgstr ""
 
 msgctxt "#32008"
 msgid "Cache settings"
+msgstr ""
+
+msgctxt "#32009"
+msgid "Check login details"
+msgstr ""
+
+msgctxt "#32010"
+msgid "Logged in successfully"
 msgstr ""

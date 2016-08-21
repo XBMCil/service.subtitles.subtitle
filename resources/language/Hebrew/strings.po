@@ -31,8 +31,8 @@ msgid "Login Details"
 msgstr "פרטי התחברות"
 
 msgctxt "#32005"
-msgid "Invalid email or password, please edit your credentials in the settings"
-msgstr "פרטי ההתחברות שגויים, אנא עדכן את פרטי ההתחברות בהגדרות התוסף"
+msgid "Wrong email or password"
+msgstr "הזנת פרטי התחברות שגויים"
 
 msgctxt "#32006"
 msgid "Clear addon`s local cache"
@@ -45,3 +45,11 @@ msgstr "נתוני הקאש של התוסף אופסו בהצלחה"
 msgctxt "#32008"
 msgid "Cache settings"
 msgstr "הגדרות קאש"
+
+msgctxt "#32009"
+msgid "Check login details"
+msgstr "בדוק פרטי התחברות"
+
+msgctxt "#32010"
+msgid "Logged in successfully"
+msgstr "התחברת בהצלחה"
