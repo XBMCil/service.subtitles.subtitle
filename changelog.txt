@@ -1,3 +1,7 @@
+4.4.4 - by CaTz (21/10/2016)
+- Fix hebrew pattern matching
+- Update icons
+
 4.4.3 - by CaTz (21/08/2016)
 - Add the ability to check credentials from the settings
 - Added Hebrew translations
