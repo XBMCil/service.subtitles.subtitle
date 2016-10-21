@@ -48,3 +48,12 @@ class TestSubtitleHelper(TestCase):
         result = self.helper._search_tvshow(item)
 
         self.assertEqual(result[0]['name'], 'agents of s h i e l d ')
+
+    def test_get_subtitle_list6(self):
+        item = {'episode': '10', 'title': u'eps1.9_zer0-day', 'preferredlanguage': 'heb', 'season': '1',
+                'year': '', 'tvshow': u'\u05de\u05e8 \u05e8\u05d5\u05d1\u05d5\u05d8'}
+
+        parse_rls_title(item)
+        result = self.helper._search_tvshow(item)
+
+        self.assertEqual(result[0]['name'], 'mr robot')
