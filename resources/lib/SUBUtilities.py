@@ -228,7 +228,7 @@ class SubtitleHelper:
 
                 eng_name = regexHelper.sub(' ', eng_name)
                 eng_name_tmp = regexHelper.sub('', eng_name)
-                heb_name = regexHelper.sub(' ', heb_name)
+                heb_name = regexHelper.sub('', heb_name)
 
                 if (search_string.startswith(eng_name_tmp) or eng_name_tmp.startswith(search_string) or
                         search_string.startswith(heb_name) or heb_name.startswith(search_string)):
